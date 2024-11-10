@@ -1,0 +1,132 @@
+import tensorflow as tf
+from tensorflow.keras.applications import VGG16
+
+# Load the VGG16 model without the top layer (which is for classification)
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+
+
+# base_model.save("VGG_MODEL.h5")
+
+
+# from tensorflow.keras.models import load_model
+
+# Load the model from the file
+# base_model = load_model('Models_For_DL_6/Pretrained_Model_Original_VGG/VGG_MODEL.h5')  # For HDF5 format
+
+
+
+# Freeze the layers in the base model
+for layer in base_model.layers:
+    layer.trainable = False
+
+
+
+from tensorflow.keras.layers import Flatten, Dense
+from tensorflow.keras.models import Model
+
+# Create a custom classifier
+x = Flatten()(base_model.output)  # Flatten the output of the base model
+x = Dense(512, activation='relu')(x)  # Add a fully connected layer
+num_classes = 6  # Change this to the number of flower classes
+x = Dense(num_classes, activation='softmax')(x)  # Output layer
+
+# Create the new model
+model = Model(inputs=base_model.input, outputs=x)
+
+
+
+# Compile the model
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Assume you have a data generator for training
+train_datagen = tf.keras.preprocessing.image.ImageDataGenerator(
+    rescale=1./255,
+    validation_split=0.2
+)
+
+train_generator = train_datagen.flow_from_directory(
+    'flower_photos/',  # Your dataset directory
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode='categorical',
+    subset='training'  # Set as training data
+)
+
+
+
+
+
+# Train the model
+model.fit(train_generator, epochs=5)
+
+
+names = train_generator.class_indices
+
+#model.save("New_Model_After_Freezing.h5")
+
+
+names
+
+
+import numpy as np
+from tensorflow.keras.preprocessing import image
+
+# Load an image to make a prediction
+img_path = 'flower_photos/sunflowers/1022552002_2b93faf9e7_n.jpg'
+img = image.load_img(img_path, target_size=(224, 224))  # Adjust the target size as needed
+img_array = image.img_to_array(img)
+img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+img_array /= 255.0  # Normalize if required
+
+# Make predictions
+predictions = model.predict(img_array)
+predicted_class = np.argmax(predictions, axis=1)  # Get the index of the class with the highest score
+
+print(f'Predicted class: {predicted_class}')
+
+
+
+for i,val in names.items():
+    if(val == predicted_class):
+        print(i)
+        break;
+
+
+# Unfreeze the last few layers of the base model
+for layer in base_model.layers[-4:]:  # Adjust the number of layers to unfreeze
+    layer.trainable = True
+
+# Recompile the model with a lower learning rate
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5), 
+              loss='categorical_crossentropy', 
+              metrics=['accuracy'])
+
+# Continue training with the unfreezed layers
+model.fit(train_generator, epochs=5)
+
+
+model.save("Final_Model_After_Unfreezing_Layers.h5")
+
+
+# Load an image to make a prediction
+img_path = 'flower_photos/sunflowers/1022552002_2b93faf9e7_n.jpg'
+# img_path = '107693873_86021ac4ea_n.jpg'
+img = image.load_img(img_path, target_size=(224, 224))  # Adjust the target size as needed
+img_array = image.img_to_array(img)
+img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+img_array /= 255.0  # Normalize if required
+
+# Make predictions
+predictions = model.predict(img_array)
+predicted_class = np.argmax(predictions, axis=1)  # Get the index of the class with the highest score
+
+print(f'Predicted class: {predicted_class}')
+for i,val in names.items():
+    if(val == predicted_class):
+        print(i)
+        break;
+
+
+
+

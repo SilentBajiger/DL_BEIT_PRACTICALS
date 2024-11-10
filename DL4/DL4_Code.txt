@@ -1,0 +1,149 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix, classification_report
+from tensorflow.keras import layers, models
+import matplotlib.pyplot as plt
+
+
+# Load the ECG dataset
+ecg_dataset = pd.read_csv("ecg.csv")
+ecg_dataset
+
+# Preprocess the data
+scaler = StandardScaler()
+X = scaler.fit_transform(ecg_dataset.values)
+y = X  # Autoencoder input and output are the same
+
+X_train, X_test, _, _ = train_test_split(X, X, test_size=0.2, random_state=42)
+
+
+# Build and train the Autoencoder model
+input_dim = X_train.shape[1]
+
+encoder = models.Sequential([
+    layers.Input(shape=(input_dim,)),
+    layers.Dense(32, activation='relu'),
+    layers.Dense(16, activation='relu'),
+    layers.Dense(8, activation='relu')
+])
+
+decoder = models.Sequential([
+    layers.Input(shape=(8,)),
+    layers.Dense(16, activation='relu'),
+    layers.Dense(32, activation='relu'),
+    layers.Dense(input_dim, activation='linear')  # Use linear activation for reconstruction
+])
+
+
+autoencoder = models.Sequential([
+    encoder,
+    decoder
+])
+autoencoder.compile(optimizer='adam', loss='mean_squared_error')
+autoencoder.fit(X_train, X_train, epochs=10, batch_size=32, shuffle=True)
+
+
+# Detect anomalies
+y_pred = autoencoder.predict(X_test)
+mse = np.mean(np.power(X_test - y_pred, 2), axis=1)
+
+# Define a threshold for anomaly detection
+threshold = np.percentile(mse, 95)  # Adjust the percentile as needed
+threshold
+
+
+# Predict anomalies
+anomalies = mse > threshold
+mse
+anomalies
+
+
+# Calculate the number of anomalies
+num_anomalies = np.sum(anomalies)
+print(f"Number of Anomalies: {num_anomalies}")
+
+
+# Plot the anomalies
+plt.figure(figsize=(12, 6))
+plt.plot(mse, marker='o', linestyle='', markersize=3, label='MSE')
+plt.axhline(threshold, color='r', linestyle='--', label='Anomaly Threshold')
+plt.xlabel('Sample Index')
+plt.ylabel('MSE')
+plt.title('Anomaly Detection Results')
+plt.legend()
+plt.show()
+
+
+plt.figure(figsize=(12, 6))
+plt.plot(X_test[0], label='Original ECG')
+plt.plot(y_pred[0], label='Reconstructed ECG')
+plt.xlabel('Time')
+plt.ylabel('Amplitude')
+plt.legend()
+plt.title('Normal ECG')
+plt.show()
+
+
+# listing the index of anomalies in X_test
+anomalies_index = []
+for index, anomaly in enumerate(anomalies):
+    if anomaly == True :
+        anomalies_index.append(index)
+
+
+n = 4
+anomaly_index = anomalies_index[n]
+plt.figure(figsize=(12, 6))
+plt.plot(X_test[anomaly_index], label='Original ECG')
+plt.plot(y_pred[anomaly_index], label='Reconstructed ECG')
+plt.xlabel('Time')
+plt.ylabel('Amplitude')
+plt.legend()
+plt.title('ECG and Anomalies')
+plt.show()
+
+# Evaluate the model
+y_true = np.zeros(len(X_test))
+print("Confusion Matrix:")
+print(confusion_matrix(anomalies, anomalies))
+
+print("\nClassification Report:")
+print(classification_report(anomalies, anomalies))
+
+
+import seaborn as sns
+
+plt.figure(figsize = (6, 4.75))
+sns.heatmap(confusion_matrix(anomalies, anomalies), annot = True, annot_kws = {"size": 16}, fmt = 'd')
+plt.xticks([0.5, 1.5],  rotation = 'horizontal')
+plt.yticks([0.5, 1.5],  rotation = 'horizontal')
+plt.xlabel("Predicted label", fontsize = 14)
+plt.ylabel("True label", fontsize = 14)
+plt.title("Confusion Matrix", fontsize = 14)
+plt.grid(False)
+plt.show()
+
+
+
+# In the context of autoencoders and anomaly detection, reconstruction error is a measure of how different the output of the autoencoder is from its original input.
+# Here's a breakdown of how it works:
+
+# Autoencoder Structure:
+
+# An autoencoder learns to compress data into a latent (smaller) representation (encoding) and then reconstructs it back to its original form (decoding).
+# When the model is trained on normal data, it learns patterns in that data and can reconstruct it well.
+# Calculating Reconstruction Error:
+
+# Reconstruction error is the difference between the original input and the reconstructed output.
+# Mathematically, it is often calculated using metrics like Mean Squared Error (MSE) or Mean Absolute Error (MAE):
+# Use in Anomaly Detection:
+
+# When an autoencoder is trained on normal data, it generally has a low reconstruction error for normal instances.
+# For anomalous data, which differs significantly from normal patterns, the autoencoder struggles to reconstruct it accurately, resulting in a higher reconstruction error.
+# By setting a threshold on reconstruction error, we can classify data points as normal or anomalous:
+# If the reconstruction error is below the threshold, the data is likely normal.
+# If the reconstruction error is above the threshold, it is likely an anomaly.
+# In summary, reconstruction error serves as a measure of how well the autoencoder has learned the normal patterns in the data, and deviations in this error can indicate anomalies.
